@@ -1,0 +1,92 @@
+# output/client.py
+from __future__ import annotations
+
+import requests
+import json
+from typing import Any, Dict, Tuple, Optional
+from datetime import datetime, date
+from decimal import Decimal
+from enum import Enum
+
+class Client:
+    def __init__(self, endpoint: str, headers: Optional[Dict[str, str]] = None, timeout: int = 30):
+        self.endpoint = endpoint
+        self.headers = headers or {"Content-Type": "application/json"}
+        self.timeout = timeout
+        self.session = requests.Session()
+
+    def do(self, query: str, variables: Dict[str, Any]):
+        payload = {"query": query, "variables": variables}
+        payload_dict = class_to_dict(payload)
+        print('>>>>>>>>>>>>', payload_dict)
+        resp = self.session.post(self.endpoint, json=payload_dict, headers=self.headers, timeout=self.timeout)
+        try:
+            data = resp.json()
+        except json.JSONDecodeError:
+            resp.raise_for_status()
+        # If GraphQL errors exist, return them as exception
+        if isinstance(data, dict) and "errors" in data and data["errors"]:
+            raise RuntimeError(f"GraphQL errors: {data['errors']}")
+        return data.get("data")
+
+def class_to_dict(obj: Any) -> Any:
+    """
+    将嵌套的类对象转换为字典
+    支持各种常见数据类型的处理
+    """
+    # 如果是 None，直接返回
+    if obj is None:
+        return None
+    
+    # 如果是基本数据类型，直接返回
+    if isinstance(obj, (str, int, float, bool)):
+        return obj
+    
+    # 如果是字典，递归处理每个值
+    if isinstance(obj, dict):
+        return {key: class_to_dict(value) for key, value in obj.items() if value is not None}
+    
+    # 如果是列表、元组、集合等可迭代对象
+    if isinstance(obj, (list, tuple, set)):
+        return [class_to_dict(item) for item in obj if item is not None]
+    
+    # 处理 datetime 和 date 对象
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    
+    # 处理 Decimal
+    if isinstance(obj, Decimal):
+        return float(obj)
+    
+    # 处理 Enum
+    if isinstance(obj, Enum):
+        return obj.value
+    
+    # 如果是类对象
+    if hasattr(obj, '__dict__'):
+        # 获取对象的属性字典，并递归处理
+        result = {}
+        for key, value in obj.__dict__.items():
+            if value is None:
+                continue
+            # 过滤掉私有属性（以 _ 开头的）
+            if not key.startswith('_'):
+                result[key] = class_to_dict(value)
+        return result
+    
+    # 如果有 to_dict 方法，使用它
+    if hasattr(obj, 'to_dict') and callable(getattr(obj, 'to_dict')):
+        return class_to_dict(obj.to_dict())
+    
+    # 如果有 __json__ 方法，使用它
+    if hasattr(obj, '__json__') and callable(getattr(obj, '__json__')):
+        return class_to_dict(obj.__json__())
+    
+    # 其他无法处理的类型，转换为字符串
+    return str(obj)
+
+def to_json(obj: Any, **kwargs) -> str:
+    """
+    将对象转换为 JSON 字符串
+    """
+    return json.dumps(class_to_dict(obj), **kwargs)

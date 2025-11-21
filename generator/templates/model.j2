@@ -1,0 +1,50 @@
+# output/model.py
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Optional, List, Any
+import datetime
+from enum import Enum
+
+# Enums
+{% for e in enums %}
+class {{ e.name }}(str, Enum):
+{% for v in e["values"] %}
+    {{ v }} = "{{ v }}"
+{% endfor %}
+
+{% endfor %}
+
+# Interfaces
+{% for it in interfaces %}
+@dataclass
+class {{ it.name }}:
+{% for f in it.fields %}
+    {{ f.name }}: Optional[{{ f.type }}] = None
+{% endfor %}
+
+{% endfor %}
+
+# Input types
+{% for inp in inputs %}
+@dataclass
+class {{ inp.name }}:
+{% for f in inp.fields %}
+    {{ f.name }}: Optional[{{ f.type }}] = None
+{% endfor %}
+
+{% endfor %}
+
+# Object models
+{% for m in models %}
+@dataclass
+class {{ m.name }}{% if m.interfaces %}({{ m.interfaces|join(', ') }}){% endif %}:
+{% if m.fields|length == 0 %}
+    pass
+{% else %}
+{% for f in m.fields %}
+    {{ f.name }}: Optional[{{ f.type }}] = None
+{% endfor %}
+{% endif %}
+
+{% endfor %}

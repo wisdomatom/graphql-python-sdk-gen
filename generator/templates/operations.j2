@@ -1,0 +1,40 @@
+# output/operations.py
+from typing import Any, Dict, Optional
+from .selector import Field, build
+from .client import Client
+from .model import *
+from .selector import *
+
+# Operation builders
+{% for op in ops %}
+class {{ op.name|capitalize }}:
+    def __init__(self):
+        self.field = Field(name="{{ op.name }}")
+        {% if op.args|length > 0 %}
+        # initialize arg_types for this field
+        {% for a in op.args %}
+        self.field.arg_types["{{ a.name }}"] = "{{ a.type }}"
+        {% endfor %}
+        {% endif %}
+
+    {% for a in op.args %}
+    def {{ a.name }}(self, v):
+        self.field.args["{{ a.name }}"] = v
+        return self
+    {% endfor %}
+
+    def select(self, fn):
+        sel = {{ op.return_type }}Selector("{{ op.return_type }}")
+        fn(sel)
+        self.field.children.append(sel.get_field())
+        return self
+
+    def build(self):
+        q, vars = build(self.field, "{{ op.kind }}")
+        return q, vars
+
+    def do(self, client: Client):
+        q, vars = self.build()
+        data = client.do(q, vars)
+        return data.get("{{ op.name }}")
+{% endfor %}

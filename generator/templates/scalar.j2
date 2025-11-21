@@ -1,0 +1,6 @@
+# output/scalar.py
+from typing import Any, Dict
+
+{% for name, py in scalar_map.items() %}
+Scalar{{ name }} = {{ py }}
+{% endfor %}
