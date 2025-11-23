@@ -18,6 +18,31 @@ def build_type_maps(introspection: Dict[str, Any]):
     object_names = [t["name"] for t in types if t.get("kind") == "OBJECT" and not t["name"].startswith("__")]
     return types, type_map, object_names
 
+def is_selector_type(tp: dict) -> bool:
+    if tp.get('name') == 'Mutation' and tp.get('kind') == 'OBJECT':
+        return False
+    if tp.get('name') == 'Query' and tp.get('kind') == 'OBJECT':
+        return False
+    if tp.get('kind') == 'INPUT_OBJECT':
+        return False
+    if tp.get('kind') == 'ENUM':
+        return False
+    if tp.get('kind') == 'SCALAR':
+        return False
+    if tp.get('name') == '__Directive':
+        return False
+    if tp.get('name') == '__Type':
+        return False
+    if tp.get('name') == '__InputValue':
+        return False
+    if tp.get('name') == '__EnumValue':
+        return False
+    if tp.get('name') == '__Field':
+        return False
+    if tp.get('name') == '__Schema':
+        return False
+    return True
+
 # Utilities to extract GraphQL inner type name and whether list/non-null
 def extract_graphql_type(t: Dict[str, Any]):
     """
@@ -78,6 +103,7 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
 
     # Build a list of simple type descriptors for templates
     models = []
+    selectors = []
     enums = []
     inputs = []
     interfaces = []
@@ -86,6 +112,26 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
 
     for t in types:
         name = t.get("name")
+
+        if is_selector_type(t):
+            fields = []
+            for f in t.get("fields", []):
+                g_type, _, _ = extract_graphql_type(f["type"])
+                pytype = gql_type_to_python(f["type"], scalar_map)
+                fields.append({
+                    "name": f["name"],
+                    "type": pytype,
+                    "gql_type": g_type,
+                    "raw_type": unwrap_type(pytype),
+                    "is_object": g_type in object_type_names
+                })
+            sel = {
+                'name': name,
+                'fields': fields,
+            }
+            if t.get('interfaces') is not None:
+                sel['interfaces'] = [i["name"] for i in t.get("interfaces", []) if t.get('interfaces')]
+            selectors.append(sel)
         if not name or name.startswith("__"):
             continue
         kind = t.get("kind")
@@ -119,8 +165,15 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
         if kind == "INTERFACE":
             fields = []
             for f in t.get("fields", []):
+                g_type, _, _ = extract_graphql_type(f["type"])
                 pytype = gql_type_to_python(f["type"], scalar_map)
-                fields.append({"name": f["name"], "type": pytype})
+                fields.append({
+                    "name": f["name"],
+                    "type": pytype,
+                    "gql_type": g_type,
+                    "raw_type": unwrap_type(pytype),
+                    "is_object": g_type in object_type_names
+                })
             interfaces.append({"name": name, "fields": fields})
             continue
 
@@ -148,6 +201,7 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
 
     ctx = {
         "models": models,
+        "selectors": selectors,
         "inputs": inputs,
         "enums": enums,
         "interfaces": interfaces,

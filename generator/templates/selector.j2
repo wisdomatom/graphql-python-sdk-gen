@@ -62,7 +62,7 @@ def build(field: Field, kind: str):
 
 
 # ---- SELECTOR CLASSES ----
-{% for m in models %}
+{% for m in selectors %}
 class {{ m["name"] }}Selector:
     def __init__(self, parent: str):
         self.field = Field(name=parent)
