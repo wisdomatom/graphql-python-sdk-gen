@@ -80,7 +80,7 @@ class {{ m["name"] }}Selector:
             return self
 
         # list or non-list is handled the same: use raw GraphQL type
-        sel = {{ f["raw_type"] }}Selector("{{ f["name"] }}")
+        sel = {{ f["gql_type"] }}Selector("{{ f["name"] }}")
         selector_fn(sel)
         self.field.children.append(sel.field)
         return self

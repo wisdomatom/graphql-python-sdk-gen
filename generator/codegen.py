@@ -82,7 +82,7 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
     inputs = []
     interfaces = []
 
-    object_type_names = set(x["name"] for x in types if x.get("kind") == "OBJECT" or x.get("kind") == "INTERFACE")
+    object_type_names = set(x["name"] for x in types if x.get("kind") in ["OBJECT", "INTERFACE", "INPUT_OBJECT"])
 
     for t in types:
         name = t.get("name")
@@ -105,12 +105,14 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
                 continue
             fields = []
             for f in t.get("fields", []):
+                g_type, _, _ = extract_graphql_type(f["type"])
                 pytype = gql_type_to_python(f["type"], scalar_map)
                 fields.append({
                     "name": f["name"], 
                     "type": pytype,
+                    "gql_type": g_type,
                     "raw_type": unwrap_type(pytype),
-                    "is_object": unwrap_type(f["name"]) in object_type_names
+                    "is_object": g_type in object_type_names
                     })
             models.append({"name": name, "fields": fields, "interfaces": [i["name"] for i in t.get("interfaces", [])]})
             continue

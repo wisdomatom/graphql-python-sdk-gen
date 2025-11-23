@@ -24,9 +24,9 @@ class {{ op.name|capitalize }}:
     {% endfor %}
 
     def select(self, fn):
-        sel = {{ op.return_type }}Selector("{{ op.return_type }}")
+        sel = {{ op.return_type }}Selector("")
         fn(sel)
-        self.field.children.append(sel.get_field())
+        self.field.children.extend(sel.get_field().children)
         return self
 
     def build(self):
