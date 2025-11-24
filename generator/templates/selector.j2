@@ -64,8 +64,8 @@ def build(field: Field, kind: str):
 # ---- SELECTOR CLASSES ----
 {% for m in selectors %}
 class {{ m["name"] }}Selector:
-    def __init__(self, parent: str):
-        self.field = Field(name=parent)
+    def __init__(self):
+        self.field = Field(name='')
 
     def select(self, *fields):
         for f in fields:
@@ -74,14 +74,8 @@ class {{ m["name"] }}Selector:
 
 {% for f in m["fields"] %}
 {% if f["is_object"] %}
-    def {{ f["name"] }}(self, selector_fn=None):
-        if selector_fn is None:
-            self.field.children.append(Field(name="{{ f["name"] }}"))
-            return self
-
-        # list or non-list is handled the same: use raw GraphQL type
-        sel = {{ f["gql_type"] }}Selector("{{ f["name"] }}")
-        selector_fn(sel)
+    def {{ f["name"] }}(self, sel: {{ f["gql_type"] }}Selector):
+        sel.field.name = "{{ f["name"] }}"
         self.field.children.append(sel.field)
         return self
 

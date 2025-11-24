@@ -18,7 +18,6 @@ class Client:
     def do(self, query: str, variables: Dict[str, Any]):
         payload = {"query": query, "variables": variables}
         payload_dict = class_to_dict(payload)
-        print('>>>>>>>>>>>>', payload_dict)
         resp = self.session.post(self.endpoint, json=payload_dict, headers=self.headers, timeout=self.timeout)
         try:
             data = resp.json()

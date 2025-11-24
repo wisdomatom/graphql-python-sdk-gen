@@ -1,4 +1,5 @@
 # generator/codegen.py
+from itertools import islice
 import json
 import os
 from typing import Dict, List, Any
@@ -46,16 +47,19 @@ def is_selector_type(tp: dict) -> bool:
 # Utilities to extract GraphQL inner type name and whether list/non-null
 def extract_graphql_type(t: Dict[str, Any]):
     """
-    Return (name, is_list, is_non_null)
+    Return (name, is_list, is_non_null, is_scalar)
     """
     kind = t.get("kind")
     if kind == "NON_NULL":
-        return extract_graphql_type(t["ofType"])
+        name, is_list, _, is_scalar = extract_graphql_type(t["ofType"])
+        return name, is_list, True, is_scalar
     if kind == "LIST":
-        name, _, _ = extract_graphql_type(t["ofType"])
-        return name, True, False
+        name, _, not_null, is_scalar = extract_graphql_type(t["ofType"])
+        return name, True, not_null, is_scalar
     # base case
-    return t.get("name"), False, False
+    is_scalar = t.get("kind")  in ["SCALAR"]
+
+    return t.get("name"), False, False, is_scalar
 
 def gql_type_to_python(t: Dict[str, Any], scalar_map: Dict[str, str]) -> str:
     """
@@ -81,6 +85,37 @@ def gql_type_to_python(t: Dict[str, Any], scalar_map: Dict[str, str]) -> str:
         return (name, False)
     res, _ = walk(t)
     return res
+
+import re
+
+def to_pascal_case(s: str, preserve_abbr: list = None) -> str:
+    """
+    高级版本：可以保持特定缩写的大写
+    Args:
+        s: 输入字符串
+        preserve_abbr: 要保持大写的缩写列表，如 ['ID', 'URL', 'API']
+    """
+    preserve_abbr = preserve_abbr or ['ID', 'URL', 'API', 'XML', 'HTTP']
+    
+    # 分割单词
+    words = re.split(r'[_-]|(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])', s)
+    
+    result = []
+    for word in words:
+        if not word:
+            continue
+            
+        # 检查是否是需要保持的缩写
+        is_abbr = any(abbr.lower() == word.lower() for abbr in preserve_abbr)
+        
+        if is_abbr:
+            # 保持缩写大写
+            result.append(word.upper())
+        else:
+            # 普通单词：首字母大写，其余小写
+            result.append(word.capitalize())
+    
+    return ''.join(result)
 
 def unwrap_type(t):
     # remove list brackets and non-null
@@ -116,14 +151,14 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
         if is_selector_type(t):
             fields = []
             for f in t.get("fields", []):
-                g_type, _, _ = extract_graphql_type(f["type"])
+                g_type, _, _, is_scalar = extract_graphql_type(f["type"])
                 pytype = gql_type_to_python(f["type"], scalar_map)
                 fields.append({
                     "name": f["name"],
                     "type": pytype,
                     "gql_type": g_type,
                     "raw_type": unwrap_type(pytype),
-                    "is_object": g_type in object_type_names
+                    "is_object": is_scalar == False,
                 })
             sel = {
                 'name': name,
@@ -151,7 +186,7 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
                 continue
             fields = []
             for f in t.get("fields", []):
-                g_type, _, _ = extract_graphql_type(f["type"])
+                g_type, _, _, _ = extract_graphql_type(f["type"])
                 pytype = gql_type_to_python(f["type"], scalar_map)
                 fields.append({
                     "name": f["name"], 
@@ -165,7 +200,7 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
         if kind == "INTERFACE":
             fields = []
             for f in t.get("fields", []):
-                g_type, _, _ = extract_graphql_type(f["type"])
+                g_type, _, _, _ = extract_graphql_type(f["type"])
                 pytype = gql_type_to_python(f["type"], scalar_map)
                 fields.append({
                     "name": f["name"],
@@ -190,13 +225,16 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
             for a in f.get("args", []):
                 args.append({"name": a["name"], "type": gql_type_to_python(a["type"], scalar_map)})
             # return type name and is_list
-            ret_name, is_list, _ = extract_graphql_type(f["type"])
+            ret_name, is_list, _, is_scalar = extract_graphql_type(f["type"])
             ops.append({
                 "name": f["name"],
+                "name_pascal": to_pascal_case(f.get('name')),
                 "kind": kind,
                 "args": args,
-                "return_type": ret_name,
+                "return_name": ret_name,
+                "return_type": gql_type_to_python(f["type"], scalar_map),
                 "return_is_list": is_list,
+                'return_is_scalar': is_scalar
             })
 
     ctx = {

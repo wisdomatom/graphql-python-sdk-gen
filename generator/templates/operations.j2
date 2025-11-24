@@ -4,10 +4,11 @@ from .selector import Field, build
 from .client import Client
 from .model import *
 from .selector import *
+import dacite
 
 # Operation builders
 {% for op in ops %}
-class {{ op.name|capitalize }}:
+class {{ op.name_pascal }}:
     def __init__(self):
         self.field = Field(name="{{ op.name }}")
         {% if op.args|length > 0 %}
@@ -23,18 +24,33 @@ class {{ op.name|capitalize }}:
         return self
     {% endfor %}
 
-    def select(self, fn):
-        sel = {{ op.return_type }}Selector("")
-        fn(sel)
+    {% if not op.return_is_scalar %}
+    def select(self, sel: {{ op.return_name }}Selector):
         self.field.children.extend(sel.get_field().children)
         return self
+    {% endif %}
 
     def build(self):
         q, vars = build(self.field, "{{ op.kind }}")
         return q, vars
 
-    def do(self, client: Client):
+    {% if not op.return_is_scalar %}
+    def do(self, client: Client) -> {{ op.return_type }}:
+        q, vars = self.build()
+        data = client.do(q, vars)
+        res = data.get("{{ op.name }}")
+        {% if op.return_is_list %}
+        result = []
+        for d in res:
+            result.append(dacite.from_dict({{ op.return_name  }}, d))
+        {% else %}
+        result = dacite.from_dict({{ op.return_name  }}, res)
+        {% endif  %}
+        return result
+    {% else %}
+    def do(self, client: Client) ->  {{ op.return_type  }}:
         q, vars = self.build()
         data = client.do(q, vars)
         return data.get("{{ op.name }}")
+    {% endif %}
 {% endfor %}

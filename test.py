@@ -2,30 +2,40 @@ from output.client import Client
 from output.model import UserWhere, UserOption
 import output.model
 import output.selector as selector
-from output.operations import Queryusers
+from output.operations import *
 from output.selector import UserSelector
+import dacite
 
 
 client = Client(endpoint="http://127.0.0.1:8001/api/v1/graphql")
 client.headers = {
-    'authorization': 'asdcIEHlshs.>w*3#X<'
+    'authorization': ''
 }
 
 client.session.verify = False
 
 
-res = Queryusers().where(
-        UserWhere(name="wisdomatom")
+res = QueryUsers().where(
+        UserWhere(name_REGEX="tom")
     ).option(
         UserOption(limit=10)
     ).select(
-       lambda q: (
-        q.select("id", "name", "createdAt").userGroups(
-            lambda q: (
-                q.select("id")
-            )
-        )
-       )
+        UserSelector().
+            select('id', 'name', 'createdAt').
+        userGroups(UserGroupSelector().
+            select('id', 'name'))
     ).do(client)
 
-print(res)
+# print(res[0].id)
+for u in res:
+    print(u.id)
+    print(u.name)
+    print(u.userGroups)
+
+user_count = CountUsers().where(
+        UserWhere(
+            # name_REGEX="tom"
+        )
+     ).do(client)
+
+print('user count:', user_count)
