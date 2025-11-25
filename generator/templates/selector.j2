@@ -2,6 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
+from .field import *
 
 @dataclass
 class Field:
@@ -67,7 +68,7 @@ class {{ m["name"] }}Selector:
     def __init__(self):
         self.field = Field(name='')
 
-    def select(self, *fields):
+    def select(self, *fields: Field{{ m["name"] }}):
         for f in fields:
             self.field.children.append(Field(name=f))
         return self
@@ -87,7 +88,6 @@ class {{ m["name"] }}Selector:
 
 {% endif %}
 {% endfor %}
-
     def get_field(self):
         return self.field
 

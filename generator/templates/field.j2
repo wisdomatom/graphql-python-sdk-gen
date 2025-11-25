@@ -1,0 +1,9 @@
+from enum import Enum
+
+{% for cls in field_classes %}
+class Field{{ cls.name }}(str, Enum):
+    {% for field in cls.fields %}
+    {{ field.name }} = "{{ field.name }}"
+    {% endfor %}
+
+{% endfor %}

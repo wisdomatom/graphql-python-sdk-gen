@@ -1,29 +1,28 @@
 from output.client import Client
 from output.model import UserWhere, UserOption
-import output.model
-import output.selector as selector
 from output.operations import *
 from output.selector import UserSelector
-import dacite
+import os
+from output.field import *
 
 
 client = Client(endpoint="http://127.0.0.1:8001/api/v1/graphql")
 client.headers = {
-    'authorization': ''
+    'authorization': os.environ['token']
 }
 
 client.session.verify = False
 
 
 res = QueryUsers().where(
-        UserWhere(name_REGEX="tom")
+        UserWhere(name_REGEX="tom",HAS=[UserHas.name])
     ).option(
         UserOption(limit=10)
     ).select(
         UserSelector().
-            select('id', 'name', 'createdAt').
+            select(FieldUser.id, FieldUser.name, FieldUser.createdAt).
         userGroups(UserGroupSelector().
-            select('id', 'name'))
+            select(FieldUserGroup.id, FieldUserGroup.name))
     ).do(client)
 
 # print(res[0].id)

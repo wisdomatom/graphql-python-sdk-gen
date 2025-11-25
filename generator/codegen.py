@@ -1,9 +1,12 @@
 # generator/codegen.py
+import enum
 from itertools import islice
 import json
+from operator import mod
 import os
 from typing import Dict, List, Any
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+import re
 
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
 OUT_DIR = os.path.join(os.path.dirname(__file__), "..", "output")
@@ -86,8 +89,6 @@ def gql_type_to_python(t: Dict[str, Any], scalar_map: Dict[str, str]) -> str:
     res, _ = walk(t)
     return res
 
-import re
-
 def to_pascal_case(s: str, preserve_abbr: list = None) -> str:
     """
     高级版本：可以保持特定缩写的大写
@@ -142,11 +143,28 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
     enums = []
     inputs = []
     interfaces = []
+    field_classes = []
 
     object_type_names = set(x["name"] for x in types if x.get("kind") in ["OBJECT", "INTERFACE", "INPUT_OBJECT"])
 
     for t in types:
         name = t.get("name")
+
+        if t.get('kind') in ['OBJECT', 'INTERFACE']:
+            fields = []
+            for f in t.get("fields", []):
+                _, _, _, is_scalar = extract_graphql_type(f["type"])
+                if is_scalar:
+                    fields.append({
+                        'name': f['name'],
+                    })
+            if len(fields) == 0:
+                continue
+            fields.sort(key=lambda x: x['name'])
+            field_classes.append({
+                'name': name,
+                'fields': fields,
+            })
 
         if is_selector_type(t):
             fields = []
@@ -160,6 +178,7 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
                     "raw_type": unwrap_type(pytype),
                     "is_object": is_scalar == False,
                 })
+            fields.sort(key=lambda x: x['name'])
             sel = {
                 'name': name,
                 'fields': fields,
@@ -171,13 +190,16 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
             continue
         kind = t.get("kind")
         if kind == "ENUM":
-            enums.append({"name": name, "values": [ev["name"] for ev in t.get("enumValues", [])]})
+            enum_values = [ev["name"] for ev in t.get("enumValues", [])]
+            enum_values.sort()
+            enums.append({"name": name, "values": enum_values})
             continue
         if kind == "INPUT_OBJECT":
             fields = []
             for f in t.get("inputFields", []):
                 pytype = gql_type_to_python(f["type"], scalar_map)
                 fields.append({"name": f["name"], "type": pytype})
+            fields.sort(key=lambda x: x['name'])
             inputs.append({"name": name, "fields": fields})
             continue
         if kind == "OBJECT":
@@ -195,6 +217,7 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
                     "raw_type": unwrap_type(pytype),
                     "is_object": g_type in object_type_names
                     })
+            fields.sort(key=lambda x: x['name'])
             models.append({"name": name, "fields": fields, "interfaces": [i["name"] for i in t.get("interfaces", [])]})
             continue
         if kind == "INTERFACE":
@@ -209,6 +232,7 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
                     "raw_type": unwrap_type(pytype),
                     "is_object": g_type in object_type_names
                 })
+            fields.sort(key=lambda x: x['name'])
             interfaces.append({"name": name, "fields": fields})
             continue
 
@@ -226,6 +250,7 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
                 args.append({"name": a["name"], "type": gql_type_to_python(a["type"], scalar_map)})
             # return type name and is_list
             ret_name, is_list, _, is_scalar = extract_graphql_type(f["type"])
+            args.sort(key=lambda x: x['name'])
             ops.append({
                 "name": f["name"],
                 "name_pascal": to_pascal_case(f.get('name')),
@@ -237,6 +262,13 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
                 'return_is_scalar': is_scalar
             })
 
+    models.sort(key=lambda x: x['name'])
+    selectors.sort(key=lambda x: x['name'])
+    inputs.sort(key=lambda x: x['name'])
+    enums.sort(key=lambda x: x['name'])
+    interfaces.sort(key=lambda x: x['name'])
+    ops.sort(key=lambda x: x['name'])
+    field_classes.sort(key=lambda x: x['name'])
     ctx = {
         "models": models,
         "selectors": selectors,
@@ -246,6 +278,7 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
         "ops": ops,
         "scalar_map": scalar_map,
         "object_names": object_names,
+        "field_classes": field_classes
     }
     return ctx
 
@@ -264,7 +297,7 @@ def render_all(introspection_path: str, out_dir: str = None):
         lstrip_blocks=True,
     )
 
-    templates = ["model.j2", "selector.j2", "client.j2", "operations.j2"]
+    templates = ["model.j2", "selector.j2", "client.j2", "operations.j2", "field.j2"]
     for tpl in templates:
         template = env.get_template(tpl)
         out = template.render(ctx)

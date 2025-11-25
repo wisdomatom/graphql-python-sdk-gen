@@ -53,4 +53,5 @@ class {{ op.name_pascal }}:
         data = client.do(q, vars)
         return data.get("{{ op.name }}")
     {% endif %}
+
 {% endfor %}
