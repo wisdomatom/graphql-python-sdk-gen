@@ -1,8 +1,5 @@
 # generator/codegen.py
-import enum
-from itertools import islice
 import json
-from operator import mod
 import os
 from typing import Dict, List, Any
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -176,7 +173,7 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
                     "type": pytype,
                     "gql_type": g_type,
                     "raw_type": unwrap_type(pytype),
-                    "is_object": is_scalar == False,
+                    "is_object": not is_scalar,
                 })
             fields.sort(key=lambda x: x['name'])
             sel = {
