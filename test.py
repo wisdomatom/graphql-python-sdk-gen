@@ -1,9 +1,9 @@
 from output.client import Client
-from output.model import UserWhere, UserOption
-from output.operations import *
-from output.selector import UserSelector
+from output.model import CategoryOption, CategoryWhere, ProductOption, ProductWhere, UserGroupOption, UserGroupWhere, UserWhere, UserOption, UserHas
+from output.operations import QueryUsers, CountUsers, QueryCategorys
+from output.selector import CategorySelector, ProductSelector, UserSelector, UserGroupSelector
 import os
-from output.field import *
+from output.field import FieldCategory, FieldUser, FieldUserGroup, FieldProduct
 
 
 client = Client(endpoint="http://127.0.0.1:8001/api/v1/graphql")
@@ -21,7 +21,10 @@ res = QueryUsers().where(
     ).select(
         UserSelector().
             select(FieldUser.id, FieldUser.name, FieldUser.createdAt).
-        userGroups(UserGroupSelector().
+        userGroups(
+            UserGroupWhere(),
+            UserGroupOption(),
+            UserGroupSelector().
             select(FieldUserGroup.id, FieldUserGroup.name))
     ).do(client)
 
@@ -38,3 +41,43 @@ user_count = CountUsers().where(
      ).do(client)
 
 print('user count:', user_count)
+
+res = QueryCategorys().where(
+        CategoryWhere()
+    ).option(
+        CategoryOption()
+    ).select(
+        CategorySelector().select(
+            FieldCategory.id,
+            FieldCategory.name
+        ).children(
+            CategoryWhere(),
+            CategoryOption(),
+            CategorySelector().select(
+                FieldCategory.id,
+                FieldCategory.name
+            ).children(
+                CategoryWhere(name='aha'),
+                CategoryOption(),
+                CategorySelector().select(
+                    FieldCategory.id,
+                    FieldCategory.name
+                )
+            ).parent(
+                CategoryWhere(),
+                CategoryOption(),
+                CategorySelector().select(
+                    FieldCategory.id,
+                    FieldCategory.name
+                )
+            ).products(
+                ProductWhere(),
+                ProductOption(),
+                ProductSelector().select(
+                    FieldProduct.id,
+                    FieldProduct.name
+                )
+            )
+        )
+    ).do(client)
+print('category:', res)

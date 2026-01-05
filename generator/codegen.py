@@ -166,6 +166,18 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
         if is_selector_type(t):
             fields = []
             for f in t.get("fields", []):
+                args = f["args"]
+                field_args = []
+                for arg in args:
+                    g_type, _, _, _ = extract_graphql_type(arg.get('type'))
+                    pytype = gql_type_to_python(arg.get('type'), scalar_map)
+                    field_args.append({
+                        'name': arg.get('name'),
+                        'type': pytype,
+                        'gql_type': g_type
+                    })
+                args_str = ', '.join([f'{e.get("name")}: {e.get("type")}' for e in field_args])
+
                 g_type, _, _, is_scalar = extract_graphql_type(f["type"])
                 pytype = gql_type_to_python(f["type"], scalar_map)
                 fields.append({
@@ -174,6 +186,8 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
                     "gql_type": g_type,
                     "raw_type": unwrap_type(pytype),
                     "is_object": not is_scalar,
+                    "args": field_args,
+                    "args_str": args_str
                 })
             fields.sort(key=lambda x: x['name'])
             sel = {
@@ -244,7 +258,8 @@ def prepare_template_context(types: List[Dict[str, Any]], type_map: Dict[str, An
             # args
             args = []
             for a in f.get("args", []):
-                args.append({"name": a["name"], "type": gql_type_to_python(a["type"], scalar_map)})
+                gql_type, _, _, _ = extract_graphql_type(a["type"])
+                args.append({"name": a["name"], "type": gql_type_to_python(a["type"], scalar_map), "gql_type": gql_type})
             # return type name and is_list
             ret_name, is_list, _, is_scalar = extract_graphql_type(f["type"])
             args.sort(key=lambda x: x['name'])

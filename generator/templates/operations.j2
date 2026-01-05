@@ -13,14 +13,14 @@ class {{ op.name_pascal }}:
         self.field = Field(name="{{ op.name }}")
         {% if op.args|length > 0 %}
         # initialize arg_types for this field
-        {% for a in op.args %}
-        self.field.arg_types["{{ a.name }}"] = "{{ a.type }}"
-        {% endfor %}
         {% endif %}
 
     {% for a in op.args %}
-    def {{ a.name }}(self, v):
-        self.field.args["{{ a.name }}"] = v
+    def {{ a.name }}(self, v: {{ a.type }}):
+        self.field.args["{{ a.name }}"] = {
+            "arg": v,
+            "arg_type": "{{ a.gql_type }}",
+        }
         return self
     {% endfor %}
 

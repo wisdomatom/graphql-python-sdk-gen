@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 from .field import *
+from .model import *
 
 @dataclass
 class Field:
@@ -11,24 +12,24 @@ class Field:
     arg_types: Dict[str, str] = field(default_factory=dict)
     children: List["Field"] = field(default_factory=list)
 
-    def to_graphql(self, indent: str = "", name_map: dict[str, str] = {}) -> str:
+    def to_graphql(self, indent: str = "", counter: [int] = [0]) -> str:
         s = indent + self.name
         if self.args:
             parts = []
-            for k in self.args.keys():
-                var_name = name_map.get(f"{self.name}.{k}")
-                parts.append(f"{k}: ${var_name}")
+            for k, v in self.args.items():
+                counter[0] += 1
+                parts.append(f"{k}: ${k}_{counter[0]}")
             s += "(" + ", ".join(parts) + ")"
         if not self.children:
             return s + "\n"
         s += " {\n"
         for c in self.children:
-            s += c.to_graphql(indent + "  ")
+            s += c.to_graphql(indent + "  ", counter)
         s += indent + "}\n"
         return s
 
 
-def _collect_vars(f: Field, vars: Dict[str, Any], var_types: Dict[str, str], name_map: Dict[str, str], counter: List[int]):
+def _collect_vars(f: Field, vars: Dict[str, Any], var_types: Dict[str, str], counter: List[int]):
     if f is None:
         return
     for k, v in f.args.items():
@@ -36,19 +37,17 @@ def _collect_vars(f: Field, vars: Dict[str, Any], var_types: Dict[str, str], nam
             continue
         counter[0] += 1
         var_name = f"{k}_{counter[0]}"
-        name_map[f"{f.name}.{k}"] = var_name
-        var_types[var_name] = f.arg_types.get(k, "")
-        vars[var_name] = v
+        var_types[var_name] = v.get('arg_type')
+        vars[var_name] = v.get('arg')
     for c in f.children:
-        _collect_vars(c, vars, var_types, name_map, counter)
+        _collect_vars(c, vars, var_types, counter)
 
 
 def build(field: Field, kind: str):
     vars = {}
     var_types = {}
-    name_map = {}
     counter = [0]
-    _collect_vars(field, vars, var_types, name_map, counter)
+    _collect_vars(field, vars, var_types, counter)
 
     keys = sorted(var_types.keys())
     parts = [f"${k}: {var_types[k]}" for k in keys]
@@ -56,7 +55,7 @@ def build(field: Field, kind: str):
     if decl:
         decl = "(" + decl + ")"
 
-    body = field.to_graphql("  ", name_map)
+    body = field.to_graphql("  ", [0])
 
     query = kind.lower() + decl + " {\n" + body + "}"
     return query, vars
@@ -75,10 +74,25 @@ class {{ m["name"] }}Selector:
 
 {% for f in m["fields"] %}
 {% if f["is_object"] %}
+
+    {% if f["args_str"] %}
+    def {{ f["name"] }}(self, {{ f["args_str"] }}, sel: {{ f["gql_type"] }}Selector):
+        sel.field.name = "{{ f["name"] }}"
+        {% for arg in f["args"] %}
+        sel.field.args["{{ arg['name'] }}"] = {
+            "arg": {{ arg['name'] }},
+            "arg_type": "{{ arg['gql_type'] }}"
+        }
+        {% endfor %}
+        self.field.children.append(sel.field)
+
+        return self
+    {% else %}
     def {{ f["name"] }}(self, sel: {{ f["gql_type"] }}Selector):
         sel.field.name = "{{ f["name"] }}"
         self.field.children.append(sel.field)
         return self
+    {% endif %}
 
 {% else %}
     # Scalar field
